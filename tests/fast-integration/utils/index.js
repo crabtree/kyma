@@ -3,27 +3,34 @@ const fs = require("fs");
 const { join } = require("path");
 
 const kc = new k8s.KubeConfig();
-
-kc.loadFromDefault();
 var k8sDynamicApi;
 var k8sAppsApi;
 var k8sCoreV1Api;
 
 var watch;
 
-function initializeK8sClient() {
-  try{
+function initializeK8sClient(opts = void 0) {
+  opts = opts || {};
+  try {
+    if(opts.kubeconfigPath) {
+      kc.loadFromFile(kubeconfigPath);
+    } else if(opts.kubeconfig) {
+      kc.loadFromString(kubeconfig);
+    } else {
+      kc.loadFromDefault();
+    }
+
     k8sDynamicApi = kc.makeApiClient(k8s.KubernetesObjectApi);
     k8sAppsApi = kc.makeApiClient(k8s.AppsV1Api);
     k8sCoreV1Api = kc.makeApiClient(k8s.CoreV1Api);
     watch = new k8s.Watch(kc);
-    
   } catch(err) {
     console.log(err.message);
   }
   
 }
 initializeK8sClient();
+
 /**
  * Retries a promise {retriesLeft} times every {interval} miliseconds
  *
@@ -59,7 +66,6 @@ async function retryPromise(fn, retriesLeft = 10, interval = 30) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
 
 function convertAxiosError(axiosError, message) {
   if (!axiosError.response) {
@@ -157,11 +163,13 @@ async function kubectlApplyDir(dir, namespace) {
     }
   }
 }
+
 async function kubectlApply(file, namespace) {
   const yaml = fs.readFileSync(file);
   const resources = k8s.loadAllYaml(yaml);
   await k8sApply(resources, namespace);
 }
+
 async function kubectlDeleteDir(dir, namespace) {
   const files = fs.readdirSync(dir);
   for (let file of files) {
@@ -170,11 +178,13 @@ async function kubectlDeleteDir(dir, namespace) {
     }
   }
 }
+
 function kubectlDelete(file, namespace) {
   const yaml = fs.readFileSync(file);
   const listOfSpecs = k8s.loadAllYaml(yaml);
   return k8sDelete(listOfSpecs, namespace);
 }
+
 async function k8sDelete(listOfSpecs, namespace) {
   for (let res of listOfSpecs) {
     if (namespace) {
@@ -204,6 +214,7 @@ async function k8sDelete(listOfSpecs, namespace) {
     }
   }
 }
+
 async function getAllCRDs() {
   const path = '/apis/apiextensions.k8s.io/v1/customresourcedefinitions';
   const response = await k8sDynamicApi.requestPromise({
@@ -215,6 +226,7 @@ async function getAllCRDs() {
   return body.items
 
 }
+
 async function k8sApply(listOfSpecs, namespace, patch = true) {
   const options = {
     headers: { "Content-type": "application/merge-patch+json" },
@@ -453,6 +465,7 @@ async function deleteNamespaces(namespaces, wait = true) {
   }
   return waitForNamespacesResult;
 }
+
 async function listResources(path) {
   try {
     const listResponse = await k8sDynamicApi.requestPromise({
@@ -516,6 +529,7 @@ async function getAllResourceTypes() {
     }
   }
 }
+
 function ignore404(e) {
   if (e.statusCode != 404) {
     throw e;
@@ -657,6 +671,7 @@ function ignoreNotFound(e) {
     throw e;
   }
 }
+
 let DEBUG = process.env.DEBUG;
 
 function debug() {
@@ -664,8 +679,15 @@ function debug() {
     console.log.apply(null, arguments);
   }
 }
+
 function switchDebug(on = true){
   DEBUG=on;
+}
+
+function fromBase64(s) {
+  return Buffer
+    .from(s, "base64")
+    .toString("utf8");
 }
 
 function toBase64(s) {
@@ -692,7 +714,28 @@ function getEnvOrThrow(key) {
   return process.env[key];
 }
 
+function wait(fn, checkFn, timeout, interval) {
+  return new Promise((resolve, reject) => {
+      const th = setTimeout(function() {
+          done(reject, new Error("wait timeout"));
+      }, timeout);
+      const ih = setInterval(async function() {
+          let res;
+          try { res = await fn(); } 
+          catch(ex) { res = ex; }
+          checkFn(res) && done(resolve, res);
+      }, interval);
+      
+      function done(fn, arg) {
+          clearTimeout(th);
+          clearInterval(ih);
+          fn(arg);
+      }
+  });
+}
+
 module.exports = {
+  initializeK8sClient,
   retryPromise,
   convertAxiosError,
   removeServiceInstanceFinalizer,
@@ -726,8 +769,10 @@ module.exports = {
   debug,
   switchDebug,
   printRestartReport,
+  fromBase64,
   toBase64,
   genRandom,
-  getEnvOrThrow
+  getEnvOrThrow,
+  wait
 };
 
