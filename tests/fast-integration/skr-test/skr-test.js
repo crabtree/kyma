@@ -17,6 +17,11 @@ const {
   GardenerClient
 } = require("../gardener");
 const {
+  ensureCommerceMockWithCompassTestFixture,
+  checkAppGatewayResponse,
+  sendEventAndCheckResponse,
+} = require("../test/fixtures/commerce-mock");
+const {
   debug,
   genRandom,
   initializeK8sClient,
@@ -24,8 +29,8 @@ const {
 
 describe("SKR test", function() {
   const keb = new KEBClient(KEBConfig.fromEnv());
-  const director = new DirectorClient(DirectorConfig.fromEnv());
   const gardener = new GardenerClient(GardenerConfig.fromEnv());
+  const director = new DirectorClient(DirectorConfig.fromEnv());
 
   const suffix = genRandom(4);
   const appName = `app-${suffix}`;
