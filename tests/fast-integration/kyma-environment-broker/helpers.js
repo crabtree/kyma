@@ -45,6 +45,8 @@ async function ensureOperationSucceeded(keb, instanceID, operationID) {
     1000 * 60 * 60, // 1h
     1000 * 30 // 30 seconds
   );
+  
+  debug("KEB operation", res);
   expect(res).to.have.property("state", "succeeded");
 
   return res;
